@@ -28,6 +28,30 @@ jobs:
       - name: Scan Kubernetes manifests
         run: checkov -d k8s --framework kubernetes --compact --quiet
 
+  terraform:
+    name: Terraform - fmt, validate, Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: 1.17.2
+
+      - name: Format
+        run: terraform -chdir=terraform fmt -check -recursive
+
+      - name: Validate
+        run: |
+          terraform -chdir=terraform init -backend=false -input=false
+          terraform -chdir=terraform validate
+
+      - name: Install Checkov
+        run: pip install --quiet checkov==3.4.6
+
+      - name: Scan Terraform
+        run: checkov -d terraform --framework terraform --compact --quiet
+
   image-build:
     name: Image - build (sans publication)
     runs-on: ubuntu-latest
