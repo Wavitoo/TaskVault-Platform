@@ -1,0 +1,13 @@
+# Vault en MODE DEV : en mémoire, déjà "unsealed", token root connu. Uniquement pour le
+# développement local. Ne JAMAIS utiliser ce mode en production (aucune persistance, aucune sécurité du token root).
+server:
+  dev:
+    enabled: true
+    devRootToken: root
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+injector:
+  enabled: false   # on utilise External Secrets, pas l'injecteur sidecar
+csi:
+  enabled: false

@@ -5,10 +5,12 @@ Une exception sans justification écrite est une vulnérabilité cachée.
 
 | Règle | Ressource | Pourquoi | Quand ça disparaît |
 |---|---|---|---|
-| CKV_K8S_35 (secrets en fichiers) | backend, postgres | Le backend lit `process.env`, et on ne modifie pas TaskVault | Étape 5 : gestionnaire de secrets |
+| CKV_K8S_35 (secrets en fichiers) | backend | Le backend lit `process.env` et on ne modifie pas TaskVault. Les valeurs viennent de Vault via ESO, jamais de git | Si TaskVault accepte des variables `*_FILE` |
 | CKV_K8S_40 (UID élevé) | postgres | L'image exige l'UID 70 (utilisateur présent dans `/etc/passwd`) pour `initdb` | Permanente (risque limité : non-root, pas de capabilities, FS en lecture seule) |
 
 ## Corrigées grâce à Checkov
 
 - `postgres` : image épinglée par digest, `imagePullPolicy: Always`, sonde de liveness ajoutée.
 - `backend` : UID 1000 -> 10001, puis (étape 4) image tirée de GHCR **par digest signé** avec `imagePullPolicy: Always` : les exceptions CKV_K8S_43 et CKV_K8S_15 ont disparu.
+
+- `postgres` (étape 5) : secrets lus depuis des **fichiers montés** (`POSTGRES_*_FILE`) au lieu de variables d'environnement : l'exception CKV_K8S_35 a disparu pour Postgres.

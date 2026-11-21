@@ -56,6 +56,22 @@ if grep -q 'none of the expected identities matched' <<<"$OUT"; then
   ok "une image GHCR signée par un AUTRE signataire est refusée (identité non reconnue)"
 else ko "image d'un autre signataire : refus pour la mauvaise raison ou acceptée"; echo "$OUT" | head -3; fi
 
+echo "== Secrets (Vault + External Secrets) =="
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+grep -rqE '^kind: Secret$' "$ROOT/k8s" \
+  && ko "un objet Secret (avec valeurs) est présent dans le dépôt" || ok "aucun objet Secret dans le dépôt : seules des références (ExternalSecret) sont versionnées"
+kubectl -n $NS get secret taskvault-db taskvault-app -o jsonpath='{range .items[*]}{.metadata.ownerReferences[0].kind}{"\n"}{end}' | grep -vq ExternalSecret \
+  && ko "un secret n'est pas géré par External Secrets" || ok "les secrets sont créés et possédés par External Secrets (source : Vault)"
+kubectl -n $NS exec postgres-0 -- env 2>/dev/null | grep -q '^POSTGRES_PASSWORD=' \
+  && ko "le mot de passe Postgres est visible en variable d'environnement" || ok "le mot de passe Postgres n'est pas en variable d'environnement (fichier monté)"
+# Moindre privilège côté Vault : un jeton avec la politique d'ESO lit taskvault/* mais rien d'autre.
+TOK=$(kubectl -n vault exec vault-0 -- env VAULT_TOKEN=root VAULT_ADDR=http://127.0.0.1:8200 vault token create -policy=taskvault-read -field=token 2>/dev/null)
+cap() { kubectl -n vault exec vault-0 -- env VAULT_TOKEN=root VAULT_ADDR=http://127.0.0.1:8200 vault token capabilities "$TOK" "$1" 2>/dev/null; }
+[ "$(cap secret/data/taskvault/db)" = "read" ] && ok "la politique ESO peut lire secret/taskvault/*" || ko "la politique ESO ne peut pas lire secret/taskvault/*"
+[ "$(cap secret/data/autre/chose)" = "deny" ] && ok "la politique ESO ne peut PAS lire un autre chemin (moindre privilège)" || ko "la politique ESO est trop large"
+cap secret/data/taskvault/db | grep -qE 'create|update|delete' \
+  && ko "la politique ESO permet d'écrire" || ok "la politique ESO est en lecture seule (ni écriture ni suppression)"
+
 echo "== Surface d'attaque =="
 kubectl -n $NS get pod -l app=backend -o jsonpath='{.items[0].spec.containers[0].securityContext.readOnlyRootFilesystem}' | grep -q true \
   && ok "système de fichiers du backend en lecture seule" || ko "système de fichiers du backend modifiable"

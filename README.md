@@ -27,7 +27,7 @@ d'approvisionnement signée, secrets gérés, déploiement GitOps et détection 
 - [x] 2. Déploiement durci de TaskVault (NetworkPolicy, Pod Security, RBAC)
 - [x] 3. CI : build, SBOM, signature de l'image, scan IaC
 - [x] 4. Kyverno : refus des images non signées
-- [ ] 5. Gestion des secrets
+- [x] 5. Gestion des secrets
 - [ ] 6. GitOps avec Argo CD
 - [ ] 7. Détection à l'exécution avec Falco
 - [ ] 8. Terraform pour piloter le tout
@@ -51,6 +51,19 @@ avec le motif « identité non reconnue ».
 seulement épinglée par digest) ; une liste blanche de registres serait l'étape suivante. Avec `failurePolicy: Fail`,
 une panne de Kyverno bloque les créations de pods dans `taskvault` (choix sécurité > disponibilité, limité à ce namespace).
 
+## Secrets : Vault + External Secrets
+
+Plus aucun secret dans git ni créé à la main. Les valeurs sont générées aléatoirement dans **Vault**
+(`scripts/configure-vault.sh`), et **External Secrets Operator** les copie dans des Secrets Kubernetes.
+ESO s'authentifie auprès de Vault avec le jeton de son ServiceAccount (aucun token statique) et sa politique
+est en **lecture seule sur `secret/taskvault/*`** uniquement. Seules des *références* (`ExternalSecret`) sont versionnées.
+Postgres lit ses identifiants depuis des fichiers montés, pas depuis des variables d'environnement.
+
+**Limites connues** : Vault tourne en **mode dev** (en mémoire, token root connu, aucune persistance) : c'est
+une démonstration locale, pas une configuration de production (il faudrait stockage Raft, unseal automatique, TLS).
+Le backend lit ses secrets en variables d'environnement (on ne modifie pas TaskVault), donc un changement dans Vault
+n'atteint les pods qu'au redémarrage.
+
 ## Démarrage
 
 Prérequis : Docker, `kind`, `kubectl`.
@@ -58,7 +71,7 @@ Prérequis : Docker, `kind`, `kubectl`.
 ```bash
 ./scripts/cluster-up.sh            # crée le cluster
 ./scripts/install-kyverno.sh       # Kyverno + politique de vérification des signatures
-./scripts/create-dev-secrets.sh    # secrets aléatoires (jamais écrits sur disque ni dans git)
+./scripts/install-secrets.sh       # Vault (dev) + External Secrets + secrets aléatoires
 kubectl apply -k k8s/base          # déploie (image GHCR signée, tirée par digest)
 ./scripts/verify-hardening.sh      # prouve que les protections bloquent bien
 ./scripts/cluster-down.sh          # supprime le cluster
