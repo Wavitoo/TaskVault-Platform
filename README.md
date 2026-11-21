@@ -1,5 +1,7 @@
 # taskvault-platform
 
+![CI](https://github.com/Wavitoo/taskvault-platform/actions/workflows/ci.yml/badge.svg)
+
 Plateforme de déploiement sécurisé pour [TaskVault](https://github.com/Wavitoo/devsecops-security-pipeline).
 
 TaskVault prouve que le **code** est sécurisé avant fusion (SAST, SCA, secrets, conteneur, DAST).
@@ -7,6 +9,13 @@ Ce dépôt prouve que le **déploiement et l'exécution** le sont aussi : Kubern
 d'approvisionnement signée, secrets gérés, déploiement GitOps et détection à l'exécution.
 
 > En construction. Tout tourne en local et gratuitement (cluster [kind](https://kind.sigs.k8s.io/)).
+
+## Documentation
+
+- [Modèle de menaces (STRIDE)](docs/threat-model.md) : 19 menaces, contrôle, preuve et statut honnête
+- [Journal d'incidents](docs/incidents.md) : ce qui a cassé, pourquoi, et ce qui reste inexpliqué
+- [Exceptions Checkov](docs/checkov-exceptions.md) : chaque exception est justifiée
+- [Politique de sécurité](SECURITY.md)
 
 ## Architecture
 
@@ -146,6 +155,12 @@ un SIEM (Falcosidekick, Loki/Grafana, Wazuh) est l'étape suivante. Falco s'exé
 
 `verify-hardening.sh` joue les bons **et** les mauvais cas : un contrôle jamais vu bloquer quelque chose
 n'est pas une preuve.
+
+## Rescan planifié
+
+Un workflow hebdomadaire (`scheduled-scan.yml`) rescanne l'image **déployée** avec Trivy et échoue si une faille
+CRITICAL/HIGH corrigeable apparaît. Il a déjà trouvé 2 failles dans une image saine à la construction (voir
+[incidents](docs/incidents.md), n°9) : un scan fait une seule fois ne suffit pas.
 
 ## Démarrage
 

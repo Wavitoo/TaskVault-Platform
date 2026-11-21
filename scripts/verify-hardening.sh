@@ -69,6 +69,8 @@ TOK=$(kubectl -n vault exec vault-0 -- env VAULT_TOKEN=root VAULT_ADDR=http://12
 cap() { kubectl -n vault exec vault-0 -- env VAULT_TOKEN=root VAULT_ADDR=http://127.0.0.1:8200 vault token capabilities "$TOK" "$1" 2>/dev/null; }
 [ "$(cap secret/data/taskvault/db)" = "read" ] && ok "la politique ESO peut lire secret/taskvault/*" || ko "la politique ESO ne peut pas lire secret/taskvault/*"
 [ "$(cap secret/data/autre/chose)" = "deny" ] && ok "la politique ESO ne peut PAS lire un autre chemin (moindre privilège)" || ko "la politique ESO est trop large"
+AUD=$(kubectl -n vault exec vault-0 -- env VAULT_TOKEN=root VAULT_ADDR=http://127.0.0.1:8200 vault read -field=audience auth/kubernetes/role/eso 2>/dev/null)
+[ "$AUD" = "vault" ] && ok "le rôle Vault d'ESO est lié à l'audience 'vault'" || ko "le rôle Vault d'ESO n'a pas d'audience (jeton réutilisable pour un autre service)"
 cap secret/data/taskvault/db | grep -qE 'create|update|delete' \
   && ko "la politique ESO permet d'écrire" || ok "la politique ESO est en lecture seule (ni écriture ni suppression)"
 

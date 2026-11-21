@@ -25,11 +25,12 @@ path "secret/data/argocd/*" {
 }
 POLICY
 
-# 3. Auth Kubernetes : ESO prouve son identité avec le jeton de son ServiceAccount (aucun token statique)
+# 3. Auth Kubernetes : ESO prouve son identité avec le jeton de son ServiceAccount (aucun token statique).
+#    audience=vault : le jeton doit avoir été émis POUR Vault ; un jeton destiné à un autre service est refusé.
 V auth list -format=json | grep -q '"kubernetes/"' || V auth enable kubernetes >/dev/null
 V write auth/kubernetes/config kubernetes_host="https://kubernetes.default.svc" >/dev/null
 V write auth/kubernetes/role/eso \
   bound_service_account_names=external-secrets \
   bound_service_account_namespaces=external-secrets \
-  policies=taskvault-read ttl=15m >/dev/null
+  policies=taskvault-read ttl=15m audience=vault >/dev/null
 echo "Vault configuré (auth Kubernetes + politique taskvault-read)."
