@@ -5,9 +5,7 @@ metadata:
   namespace: taskvault
   annotations:
     # Exceptions documentées (voir docs/checkov-exceptions.md)
-    checkov.io/skip1: "CKV_K8S_43=Image locale de développement ; remplacée par un digest signé à l'étape 4 (Kyverno)"
-    checkov.io/skip2: "CKV_K8S_15=Image locale de développement chargée dans kind ; lève à l'étape 4"
-    checkov.io/skip3: "CKV_K8S_35=Le backend lit ses secrets en variables d'environnement ; remplacé à l'étape 5"
+    checkov.io/skip1: "CKV_K8S_35=Le backend lit ses secrets en variables d'environnement ; remplacé à l'étape 5"
 spec:
   replicas: 2
   selector:
@@ -28,8 +26,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: backend
-          image: taskvault-backend:local
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/wavitoo/taskvault-backend@sha256:a47faedc77abdc25cef218d273c108bd96c98829cf0899789bbbf85aa690a730
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
           env:

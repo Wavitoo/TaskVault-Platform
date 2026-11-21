@@ -26,7 +26,7 @@ d'approvisionnement signée, secrets gérés, déploiement GitOps et détection 
 - [x] 1. Cluster local reproductible
 - [x] 2. Déploiement durci de TaskVault (NetworkPolicy, Pod Security, RBAC)
 - [x] 3. CI : build, SBOM, signature de l'image, scan IaC
-- [ ] 4. Kyverno : refus des images non signées
+- [x] 4. Kyverno : refus des images non signées
 - [ ] 5. Gestion des secrets
 - [ ] 6. GitOps avec Argo CD
 - [ ] 7. Détection à l'exécution avec Falco
@@ -40,15 +40,26 @@ build de l'image TaskVault (commit épinglé dans `taskvault.ref`), push sur GHC
 vérification de la signature dans le pipeline lui-même. Les exceptions Checkov sont justifiées
 dans [docs/checkov-exceptions.md](docs/checkov-exceptions.md). Toutes les actions sont épinglées par SHA.
 
+## Admission : seules les images signées entrent
+
+Une politique Kyverno (`k8s/policies/verify-images.yaml`) refuse tout pod du namespace `taskvault` dont
+l'image GHCR n'est pas signée par le workflow `ci.yml` de ce dépôt sur `main`. Vérifié par des tests :
+l'image du backend signée par la CI est admise, une image GHCR signée par un autre signataire est refusée
+avec le motif « identité non reconnue ».
+
+**Limites connues** : la politique ne couvre que les images de `ghcr.io/*` (l'image Postgres de Docker Hub est
+seulement épinglée par digest) ; une liste blanche de registres serait l'étape suivante. Avec `failurePolicy: Fail`,
+une panne de Kyverno bloque les créations de pods dans `taskvault` (choix sécurité > disponibilité, limité à ce namespace).
+
 ## Démarrage
 
 Prérequis : Docker, `kind`, `kubectl`.
 
 ```bash
 ./scripts/cluster-up.sh            # crée le cluster
-./scripts/build-load-image.sh      # construit l'image TaskVault et la charge dans kind
+./scripts/install-kyverno.sh       # Kyverno + politique de vérification des signatures
 ./scripts/create-dev-secrets.sh    # secrets aléatoires (jamais écrits sur disque ni dans git)
-kubectl apply -k k8s/base          # déploie
+kubectl apply -k k8s/base          # déploie (image GHCR signée, tirée par digest)
 ./scripts/verify-hardening.sh      # prouve que les protections bloquent bien
 ./scripts/cluster-down.sh          # supprime le cluster
 ```

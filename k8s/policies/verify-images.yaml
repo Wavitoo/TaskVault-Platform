@@ -1,0 +1,36 @@
+# Politique d'admission Kyverno : toute image tirée de GHCR doit être signée par le workflow
+# CI de CE dépôt (branche main). Sinon, le pod est REFUSÉ avant même d'être créé.
+#
+# Cela bloque : une image modifiée après coup, une image poussée à la main, ou une image
+# signée par un autre dépôt, un autre workflow ou une autre branche.
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedImageValidatingPolicy
+metadata:
+  name: verify-ghcr-images
+  namespace: taskvault
+spec:
+  validationActions: [Deny]
+  # Fail = si Kyverno est indisponible, on refuse plutôt que de laisser passer (portée limitée
+  # au namespace taskvault : une panne de Kyverno ne bloque pas le reste du cluster).
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: [CREATE, UPDATE]
+        resources: ["pods"]
+  matchImageReferences:
+    - glob: "ghcr.io/*"
+  attestors:
+    - name: ciKeyless
+      cosign:
+        keyless:
+          identities:
+            - subjectRegExp: '^https://github\.com/Wavitoo/taskvault-platform/\.github/workflows/ci\.yml@refs/heads/main$'
+              issuer: https://token.actions.githubusercontent.com
+        ctlog:
+          url: https://rekor.sigstore.dev
+  validations:
+    - expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.ciKeyless])).all(e, e > 0)
+      message: "Image refusée : signature Cosign absente ou non émise par le workflow CI de taskvault-platform (main)."
