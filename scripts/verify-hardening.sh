@@ -46,6 +46,16 @@ if grep -qi 'forbidden\|violates' <<<"$OUT"; then
   ok "un pod sans durcissement (root possible) est refusé"
 else ko "un pod non durci aurait dû être refusé"; kubectl -n $NS delete pod t-root --ignore-not-found >/dev/null 2>&1; fi
 
+echo "== Chaîne d'approvisionnement (Kyverno) =="
+kubectl -n $NS get pod -l app=backend -o jsonpath='{.items[*].spec.containers[0].image}' | tr ' ' '\n' | grep -v '^ghcr.io/wavitoo/taskvault-backend@sha256:' | grep -q . \
+  && ko "un pod backend tourne avec une image non épinglée par digest GHCR" || ok "le backend tourne avec l'image GHCR épinglée par digest (signée)"
+FOREIGN='{"spec":{"automountServiceAccountToken":false,'"$SEC"',"containers":[{"name":"x","image":"ghcr.io/sigstore/cosign/cosign:v2.4.1",'"$CSEC"'}]}}'
+OUT=$(kubectl -n $NS run t-foreign --image=ghcr.io/sigstore/cosign/cosign:v2.4.1 --overrides="$FOREIGN" --dry-run=server 2>&1)
+# On exige le motif précis (identité différente), pas n'importe quelle erreur : sinon le test pourrait passer pour la mauvaise raison.
+if grep -q 'none of the expected identities matched' <<<"$OUT"; then
+  ok "une image GHCR signée par un AUTRE signataire est refusée (identité non reconnue)"
+else ko "image d'un autre signataire : refus pour la mauvaise raison ou acceptée"; echo "$OUT" | head -3; fi
+
 echo "== Surface d'attaque =="
 kubectl -n $NS get pod -l app=backend -o jsonpath='{.items[0].spec.containers[0].securityContext.readOnlyRootFilesystem}' | grep -q true \
   && ok "système de fichiers du backend en lecture seule" || ko "système de fichiers du backend modifiable"

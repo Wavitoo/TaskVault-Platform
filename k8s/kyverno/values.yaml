@@ -1,0 +1,9 @@
+# Valeurs Helm de Kyverno (installation 1 réplique, adaptée à un cluster local).
+admissionController:
+  replicas: 1
+backgroundController:
+  replicas: 1
+cleanupController:
+  replicas: 1
+reportsController:
+  replicas: 1
