@@ -26,7 +26,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: backend
-          image: ghcr.io/wavitoo/taskvault-backend@sha256:e4e266714f19eca48379745f828e7e06c9ecdaea212761c5b80250ebc175b894
+          image: ghcr.io/wavitoo/taskvault-backend@sha256:9dad6d9fcc4aa5fc869e67266c4c10cd33de71505535da017cd218642f529e6b
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
