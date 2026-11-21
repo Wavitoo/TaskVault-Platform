@@ -1,0 +1,20 @@
+# Ordre de déploiement (sync-wave) : namespace -> politiques Kyverno -> secrets -> application.
+# Les politiques passent AVANT l'application : aucun pod n'est admis sans contrôle de signature.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: taskvault-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: taskvault
+  source:
+    repoURL: git@github.com:Wavitoo/taskvault-platform.git
+    targetRevision: main
+    path: k8s/policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: taskvault
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

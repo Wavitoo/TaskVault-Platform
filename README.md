@@ -28,7 +28,7 @@ d'approvisionnement signée, secrets gérés, déploiement GitOps et détection 
 - [x] 3. CI : build, SBOM, signature de l'image, scan IaC
 - [x] 4. Kyverno : refus des images non signées
 - [x] 5. Gestion des secrets
-- [ ] 6. GitOps avec Argo CD
+- [x] 6. GitOps avec Argo CD
 - [ ] 7. Détection à l'exécution avec Falco
 - [ ] 8. Terraform pour piloter le tout
 
@@ -64,15 +64,32 @@ une démonstration locale, pas une configuration de production (il faudrait stoc
 Le backend lit ses secrets en variables d'environnement (on ne modifie pas TaskVault), donc un changement dans Vault
 n'atteint les pods qu'au redémarrage.
 
+## GitOps : Git est la source de vérité
+
+**Argo CD** déploie le cluster depuis ce dépôt (`main`). On n'exécute plus `kubectl apply` : on fait une PR.
+Une seule ressource est appliquée à la main (l'application racine) ; elle déploie le reste
+(*app of apps*), dans un ordre imposé par des *sync-waves* : namespace, puis politiques Kyverno, puis secrets,
+puis application. Les politiques passent donc **avant** l'application.
+
+- `selfHeal` : une modification manuelle du cluster est annulée (testé : 5 réplicas remis à 2).
+- `prune` : une ressource supprimée de Git est supprimée du cluster.
+- Un **AppProject** limite les applications à ce dépôt, au namespace `taskvault` et à deux types de ressources
+  globales. Argo CD lit le dépôt avec une **clé de déploiement en lecture seule**, stockée dans Vault et livrée par ESO.
+- Accès à l'interface : `kubectl -n argocd port-forward svc/argocd-server 8080:443`.
+
+**Limites connues** : l'application racine et la clé de déploiement sont posées par un script de bootstrap (poule et œuf :
+Argo ne peut pas se déployer lui-même avant d'avoir accès au dépôt). Le digest de l'image est mis à jour à la main dans
+`k8s/base/backend.yaml`. Une automatisation (Argo CD Image Updater ou PR automatique) serait la suite.
+
 ## Démarrage
 
 Prérequis : Docker, `kind`, `kubectl`.
 
 ```bash
 ./scripts/cluster-up.sh            # crée le cluster
-./scripts/install-kyverno.sh       # Kyverno + politique de vérification des signatures
+./scripts/install-kyverno.sh       # Kyverno (moteur de politiques)
 ./scripts/install-secrets.sh       # Vault (dev) + External Secrets + secrets aléatoires
-kubectl apply -k k8s/base          # déploie (image GHCR signée, tirée par digest)
+./scripts/install-argocd.sh        # Argo CD : déploie tout le reste depuis ce dépôt (GitOps)
 ./scripts/verify-hardening.sh      # prouve que les protections bloquent bien
 ./scripts/cluster-down.sh          # supprime le cluster
 ```
