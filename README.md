@@ -25,12 +25,20 @@ d'approvisionnement signée, secrets gérés, déploiement GitOps et détection 
 
 - [x] 1. Cluster local reproductible
 - [x] 2. Déploiement durci de TaskVault (NetworkPolicy, Pod Security, RBAC)
-- [ ] 3. CI : build, SBOM, signature de l'image, scan IaC
+- [x] 3. CI : build, SBOM, signature de l'image, scan IaC
 - [ ] 4. Kyverno : refus des images non signées
 - [ ] 5. Gestion des secrets
 - [ ] 6. GitOps avec Argo CD
 - [ ] 7. Détection à l'exécution avec Falco
 - [ ] 8. Terraform pour piloter le tout
+
+## Chaîne d'approvisionnement (CI)
+
+À chaque PR : scan **Checkov** des manifestes (bloquant) et build de l'image. À chaque merge sur `main` :
+build de l'image TaskVault (commit épinglé dans `taskvault.ref`), push sur GHCR, **SBOM** (Syft, SPDX),
+**signature Cosign sans clé** (identité = ce workflow, via OIDC GitHub) sur le *digest*, puis
+vérification de la signature dans le pipeline lui-même. Les exceptions Checkov sont justifiées
+dans [docs/checkov-exceptions.md](docs/checkov-exceptions.md). Toutes les actions sont épinglées par SHA.
 
 ## Démarrage
 
