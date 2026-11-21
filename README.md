@@ -23,8 +23,8 @@ d'approvisionnement signée, secrets gérés, déploiement GitOps et détection 
 
 ## Feuille de route
 
-- [ ] 1. Cluster local reproductible
-- [ ] 2. Déploiement durci de TaskVault (NetworkPolicy, Pod Security, RBAC)
+- [x] 1. Cluster local reproductible
+- [x] 2. Déploiement durci de TaskVault (NetworkPolicy, Pod Security, RBAC)
 - [ ] 3. CI : build, SBOM, signature de l'image, scan IaC
 - [ ] 4. Kyverno : refus des images non signées
 - [ ] 5. Gestion des secrets
@@ -37,6 +37,24 @@ d'approvisionnement signée, secrets gérés, déploiement GitOps et détection 
 Prérequis : Docker, `kind`, `kubectl`.
 
 ```bash
-./scripts/cluster-up.sh     # crée le cluster
-./scripts/cluster-down.sh   # le supprime
+./scripts/cluster-up.sh            # crée le cluster
+./scripts/build-load-image.sh      # construit l'image TaskVault et la charge dans kind
+./scripts/create-dev-secrets.sh    # secrets aléatoires (jamais écrits sur disque ni dans git)
+kubectl apply -k k8s/base          # déploie
+./scripts/verify-hardening.sh      # prouve que les protections bloquent bien
+./scripts/cluster-down.sh          # supprime le cluster
 ```
+
+## Ce que le déploiement durci applique
+
+| Contrôle | Effet |
+|---|---|
+| Pod Security Standards `restricted` | Un pod privilégié, root ou sans durcissement est refusé à la création |
+| NetworkPolicy `default-deny` + règles ciblées | Seul le backend parle à la base ; la base n'est joignable de nulle part ailleurs |
+| `runAsNonRoot`, `readOnlyRootFilesystem`, `drop ALL`, seccomp | Un conteneur compromis a très peu de pouvoir |
+| ServiceAccount sans token | Aucun pod ne peut parler à l'API Kubernetes |
+| Limites CPU/mémoire | Un pod ne peut pas affamer le nœud |
+| Services `ClusterIP` uniquement | Rien n'est exposé hors du cluster (contrairement au `5432` du compose d'origine) |
+
+`verify-hardening.sh` joue les bons **et** les mauvais cas : un contrôle jamais vu bloquer quelque chose
+n'est pas une preuve.
