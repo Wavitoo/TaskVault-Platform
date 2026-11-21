@@ -12,3 +12,11 @@ CREATE TABLE IF NOT EXISTS tasks (
     completed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Liste de révocation des JWT : un jeton déconnecté (logout) reste cryptographiquement valide
+-- jusqu'à son expiration ; on mémorise donc son identifiant (jti) pour le refuser.
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+    jti TEXT PRIMARY KEY,
+    expires_at TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires_at ON revoked_tokens(expires_at);
