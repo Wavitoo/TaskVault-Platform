@@ -72,6 +72,29 @@ cap() { kubectl -n vault exec vault-0 -- env VAULT_TOKEN=root VAULT_ADDR=http://
 cap secret/data/taskvault/db | grep -qE 'create|update|delete' \
   && ko "la politique ESO permet d'écrire" || ok "la politique ESO est en lecture seule (ni écriture ni suppression)"
 
+echo "== GitOps (Argo CD) =="
+BAD=$(kubectl -n argocd get applications.argoproj.io -o jsonpath='{range .items[*]}{.metadata.name}={.status.sync.status}/{.status.health.status}{"\n"}{end}' | grep -v '=Synced/Healthy$' || true)
+[ -z "$BAD" ] && ok "toutes les applications Argo CD sont Synced et Healthy" || { ko "applications non synchronisées : $BAD"; }
+# Dérive : une modification manuelle du cluster doit être annulée par Argo CD (selfHeal).
+kubectl -n $NS scale deploy/backend --replicas=5 >/dev/null 2>&1
+R=5; for _ in $(seq 1 30); do R=$(kubectl -n $NS get deploy backend -o jsonpath='{.spec.replicas}'); [ "$R" = "2" ] && break; sleep 3; done
+[ "$R" = "2" ] && ok "une modification manuelle (5 réplicas) est annulée par Argo CD" || ko "la dérive manuelle n'a pas été corrigée (réplicas=$R)"
+# Périmètre : une application du projet taskvault ne peut pas viser un autre namespace.
+cat <<'APP' | kubectl apply -f - >/dev/null 2>&1
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: t-escape, namespace: argocd }
+spec:
+  project: taskvault
+  source: { repoURL: git@github.com:Wavitoo/taskvault-platform.git, targetRevision: main, path: k8s/base }
+  destination: { server: https://kubernetes.default.svc, namespace: kube-system }
+APP
+sleep 10
+MSG=$(kubectl -n argocd get application t-escape -o jsonpath='{.status.conditions[0].message}' 2>/dev/null)
+kubectl -n argocd delete application t-escape >/dev/null 2>&1
+grep -q 'do not match any of the allowed destinations' <<<"$MSG" \
+  && ok "une application hors du namespace taskvault est refusée par le projet Argo CD" || ko "le projet Argo CD n'a pas bloqué la destination interdite"
+
 echo "== Surface d'attaque =="
 kubectl -n $NS get pod -l app=backend -o jsonpath='{.items[0].spec.containers[0].securityContext.readOnlyRootFilesystem}' | grep -q true \
   && ok "système de fichiers du backend en lecture seule" || ko "système de fichiers du backend modifiable"
