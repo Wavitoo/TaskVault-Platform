@@ -1,0 +1,100 @@
+# Principe : tout est interdit, puis on autorise uniquement ce qui est nécessaire.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: taskvault
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# Tous les pods peuvent résoudre des noms (DNS), rien d'autre par défaut.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: taskvault
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# Le backend peut joindre la base, et seulement elle.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-to-postgres
+  namespace: taskvault
+spec:
+  podSelector:
+    matchLabels: { app: backend }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app: postgres }
+      ports:
+        - { protocol: TCP, port: 5432 }
+---
+# La base n'accepte des connexions que du backend.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-from-backend
+  namespace: taskvault
+spec:
+  podSelector:
+    matchLabels: { app: postgres }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: backend }
+      ports:
+        - { protocol: TCP, port: 5432 }
+---
+# Le backend accepte du trafic uniquement depuis les pods étiquetés "role: client".
+# (Un futur Ingress ou un pod de test reçoit ce label pour être autorisé.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-from-clients
+  namespace: taskvault
+spec:
+  podSelector:
+    matchLabels: { app: backend }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { role: client }
+      ports:
+        - { protocol: TCP, port: 3000 }
+---
+# Côté client : un pod "role: client" peut sortir vers le backend, et seulement vers lui.
+# (Le default-deny bloque aussi les sorties : sans cette règle, le client ne pourrait rien joindre.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: client-to-backend
+  namespace: taskvault
+spec:
+  podSelector:
+    matchLabels: { role: client }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app: backend }
+      ports:
+        - { protocol: TCP, port: 3000 }
