@@ -8,6 +8,37 @@ d'approvisionnement signée, secrets gérés, déploiement GitOps et détection 
 
 > En construction. Tout tourne en local et gratuitement (cluster [kind](https://kind.sigs.k8s.io/)).
 
+## Architecture
+
+```mermaid
+flowchart LR
+  dev(["Développeur"]) -->|"Pull Request"| ci
+
+  subgraph ci ["CI GitHub Actions"]
+    direction TB
+    c1["Checkov + Terraform validate"] --> c2["Build image"]
+    c2 --> c3["SBOM Syft"]
+    c3 --> c4["Signature Cosign keyless"]
+  end
+  c4 -->|"image + signature"| ghcr[("GHCR")]
+
+  tf["Terraform"] -->|"crée"| cluster
+  git[("Git main")] -->|"surveillé par"| argo
+
+  subgraph cluster ["Cluster kind"]
+    argo["Argo CD"] -->|"déploie"| app
+    kyv{{"Kyverno admission"}} -.->|"vérifie la signature"| app
+    vault[("Vault")] --> eso["External Secrets"] -->|"Secrets"| app
+    falco["Falco runtime"] -.->|"surveille"| app
+    subgraph app ["namespace taskvault"]
+      be["Backend x2"] --> db[("PostgreSQL")]
+    end
+  end
+  ghcr -->|"pull par digest"| kyv
+```
+
+Trait plein : flux de déploiement. Pointillé : contrôles (admission et exécution).
+
 ## Stack (100 % gratuite)
 
 | Besoin | Outil |
@@ -78,8 +109,8 @@ puis application. Les politiques passent donc **avant** l'application.
 - Accès à l'interface : `kubectl -n argocd port-forward svc/argocd-server 8080:443`.
 
 **Limites connues** : l'application racine et la clé de déploiement sont posées par un script de bootstrap (poule et œuf :
-Argo ne peut pas se déployer lui-même avant d'avoir accès au dépôt). Le digest de l'image est mis à jour à la main dans
-`k8s/base/backend.yaml`. Une automatisation (Argo CD Image Updater ou PR automatique) serait la suite.
+Argo ne peut pas se déployer lui-même avant d'avoir accès au dépôt). Le digest de l'image et les versions de charts Helm sont mis à jour à la main
+(Dependabot ne les couvre pas). Une automatisation (Argo CD Image Updater ou PR automatique) serait la suite.
 
 ## Détection à l'exécution : Falco
 

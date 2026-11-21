@@ -1,0 +1,13 @@
+# Mises à jour automatiques sous forme de PR (donc soumises à la CI) : les actions GitHub sont épinglées par SHA,
+# Dependabot met à jour le SHA ET le commentaire de version. Les charts Helm et le digest de l'image ne sont
+# pas couverts par Dependabot : ils restent mis à jour à la main (voir README, limites).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directory: /terraform
+    schedule:
+      interval: weekly
