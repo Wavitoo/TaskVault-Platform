@@ -1,0 +1,34 @@
+name: Scheduled scan
+
+# Une image peut être saine à la construction et vulnérable une semaine plus tard (nouvelles CVE publiées).
+# Ce rescan hebdomadaire de l'image DÉPLOYÉE (celle référencée par digest dans k8s/base/backend.yaml)
+# échoue si une faille CRITICAL/HIGH corrigeable est apparue : GitHub envoie alors un e-mail d'échec.
+on:
+  schedule:
+    - cron: "17 5 * * 1"   # lundi 05:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image-rescan:
+    name: Rescan de l'image déployée (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Extract deployed image digest
+        id: img
+        run: |
+          ref=$(grep -oE 'ghcr\.io/wavitoo/taskvault-backend@sha256:[0-9a-f]{64}' k8s/base/backend.yaml | head -1)
+          test -n "$ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      # Trivy épinglé par digest (v0.76.2) : un tag mobile permettrait de changer l'outil à notre insu.
+      - name: Scan deployed image
+        env:
+          REF: ${{ steps.img.outputs.ref }}
+        run: |
+          docker run --rm aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb \
+            image "$REF" --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1
