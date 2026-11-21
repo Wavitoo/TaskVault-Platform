@@ -7,6 +7,24 @@ PASS=0; FAIL=0
 ok()   { echo "  [OK]   $1"; PASS=$((PASS+1)); }
 ko()   { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
 
+
+# Attend un état stable : exactement 2 backends prêts, aucun en suppression. Affiche le nom du premier.
+# Nécessaire car des tests précédents (dérive GitOps, éviction) font varier le nombre de pods.
+stable_backend_pod() {
+  local name=""
+  for _ in $(seq 1 40); do
+    name=$(kubectl -n "$NS" get pod -l app=backend -o json | python3 -c '
+import sys,json
+pods=json.load(sys.stdin)["items"]
+ok=[p["metadata"]["name"] for p in pods if "deletionTimestamp" not in p["metadata"]
+    and any(c.get("type")=="Ready" and c.get("status")=="True" for c in p["status"].get("conditions",[]))]
+print(ok[0] if len(pods)==2 and len(ok)==2 else "")')
+    [ -n "$name" ] && { echo "$name"; return 0; }
+    sleep 3
+  done
+  return 1
+}
+
 SEC='"securityContext":{"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}}'
 CSEC='"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}'
 
@@ -97,21 +115,34 @@ kubectl -n argocd delete application t-escape >/dev/null 2>&1
 grep -q 'do not match any of the allowed destinations' <<<"$MSG" \
   && ok "une application hors du namespace taskvault est refusée par le projet Argo CD" || ko "le projet Argo CD n'a pas bloqué la destination interdite"
 
+echo "== Ressources et disponibilité =="
+# LimitRange : un conteneur sans limites reçoit des valeurs par défaut (sinon le quota le refuserait).
+DEF=$(kubectl -n $NS run t-def --image=curlimages/curl:8.11.1 --dry-run=server -o jsonpath='{.spec.containers[0].resources.limits.cpu}' \
+  --overrides="{\"spec\":{\"automountServiceAccountToken\":false,$SEC,\"containers\":[{\"name\":\"t-def\",\"image\":\"curlimages/curl:8.11.1\",$CSEC}]}}" 2>&1)
+[ "$DEF" = "250m" ] && ok "un conteneur sans limites reçoit les valeurs par défaut du LimitRange" || ko "valeurs par défaut absentes (reçu: $DEF)"
+# ResourceQuota : 2 conteneurs de 1 CPU chacun (chacun sous le plafond du LimitRange) dépassent ce qu'il reste du quota.
+BIG='{"spec":{"automountServiceAccountToken":false,'"$SEC"',"containers":['
+for c in a b; do BIG+='{"name":"'$c'","image":"curlimages/curl:8.11.1",'"$CSEC"',"resources":{"requests":{"cpu":"1","memory":"64Mi"},"limits":{"cpu":"1","memory":"128Mi"}}},'; done
+BIG="${BIG%,}"']}}'
+OUT=$(kubectl -n $NS run t-big --image=curlimages/curl:8.11.1 --overrides="$BIG" --dry-run=server 2>&1)
+grep -qi 'exceeded quota' <<<"$OUT" && ok "un pod qui dépasse le ResourceQuota est refusé (exceeded quota)" || { ko "le quota n'a pas bloqué le pod (ou refus pour un autre motif)"; echo "$OUT" | head -2; }
+# PodDisruptionBudget : la 2e éviction consécutive doit être refusée tant que le remplaçant n'est pas prêt.
+evict() { printf '{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"%s","namespace":"%s"}}' "$1" "$NS" \
+  | kubectl create --raw "/api/v1/namespaces/$NS/pods/$1/eviction" -f - 2>&1; }
+stable_backend_pod >/dev/null || true
+mapfile -t BP < <(kubectl -n $NS get pod -l app=backend -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
+if [ "${#BP[@]}" -ge 2 ]; then
+  evict "${BP[0]}" >/dev/null
+  OUT=$(evict "${BP[1]}")
+  grep -qi 'disruption budget' <<<"$OUT" && ok "le PodDisruptionBudget refuse d'évincer le dernier backend disponible" || { ko "la 2e éviction n'a pas été bloquée par le PDB"; echo "$OUT" | head -2; }
+else ko "moins de 2 backends : test PDB impossible"; fi
+
 echo "== Détection à l'exécution (Falco) =="
 falco_logs() { for p in $(kubectl -n falco get pod -o name); do kubectl -n falco logs "$p" -c falco --since="$1" 2>/dev/null; done; }
 sleep 25   # fenêtre d'observation du bruit : les sondes Postgres tournent toutes les 5-10 s
 # Le test GitOps précédent a fait varier le nombre de pods : un pod "Running" peut être en cours de suppression.
 # On attend un état stable (exactement 2 backends prêts, aucun en suppression) avant de choisir la cible.
-BPOD=""
-for _ in $(seq 1 40); do
-  BPOD=$(kubectl -n $NS get pod -l app=backend -o json | python3 -c '
-import sys,json
-pods=json.load(sys.stdin)["items"]
-ok=[p["metadata"]["name"] for p in pods if "deletionTimestamp" not in p["metadata"]
-    and any(c.get("type")=="Ready" and c.get("status")=="True" for c in p["status"].get("conditions",[]))]
-print(ok[0] if len(pods)==2 and len(ok)==2 else "")')
-  [ -n "$BPOD" ] && break; sleep 3
-done
+BPOD=$(stable_backend_pod || true)
 [ -n "$BPOD" ] || { ko "pas d'état stable du backend pour tester Falco"; BPOD=none; }
 falco_logs 25s | grep -q 'pg_isready' && ko "les sondes de santé Postgres déclenchent des alertes (faux positifs)" \
   || ok "aucun faux positif : les sondes de santé Postgres sont exclues"

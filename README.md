@@ -111,7 +111,8 @@ Une seule ressource est appliquée à la main (l'application racine) ; elle dép
 (*app of apps*), dans un ordre imposé par des *sync-waves* : namespace, puis politiques Kyverno, puis secrets,
 puis application. Les politiques passent donc **avant** l'application.
 
-- `selfHeal` : une modification manuelle du cluster est annulée (testé : 5 réplicas remis à 2).
+- `selfHeal` : une modification manuelle du cluster est annulée (testé : 5 réplicas remis à 2, en 30 s au plus). Le backoff
+  d'auto-correction par défaut (jusqu'à 5 min) a été ramené à 30 s : voir [incidents](docs/incidents.md), n°10.
 - `prune` : une ressource supprimée de Git est supprimée du cluster.
 - Un **AppProject** limite les applications à ce dépôt, au namespace `taskvault` et à deux types de ressources
   globales. Argo CD lit le dépôt avec une **clé de déploiement en lecture seule**, stockée dans Vault et livrée par ESO.
@@ -150,7 +151,8 @@ un SIEM (Falcosidekick, Loki/Grafana, Wazuh) est l'étape suivante. Falco s'exé
 | NetworkPolicy `default-deny` + règles ciblées | Seul le backend parle à la base ; la base n'est joignable de nulle part ailleurs |
 | `runAsNonRoot`, `readOnlyRootFilesystem`, `drop ALL`, seccomp | Un conteneur compromis a très peu de pouvoir |
 | ServiceAccount sans token | Aucun pod ne peut parler à l'API Kubernetes |
-| Limites CPU/mémoire | Un pod ne peut pas affamer le nœud |
+| Limites CPU/mémoire, `LimitRange`, `ResourceQuota` | Un pod ou un déploiement qui s'emballe ne peut pas épuiser le nœud |
+| `PodDisruptionBudget` | Un drain de nœud ne peut pas retirer le dernier backend |
 | Services `ClusterIP` uniquement | Rien n'est exposé hors du cluster (contrairement au `5432` du compose d'origine) |
 
 `verify-hardening.sh` joue les bons **et** les mauvais cas : un contrôle jamais vu bloquer quelque chose
@@ -168,7 +170,7 @@ Prérequis : Docker, `kind`, `kubectl`, `helm`, `terraform` (>= 1.9), `gh` authe
 
 ```bash
 cd terraform && terraform init && terraform apply   # cluster + Vault + ESO + Kyverno + Falco + Argo CD + amorçage
-./scripts/verify-hardening.sh                       # 24 tests : bons ET mauvais cas
+./scripts/verify-hardening.sh                       # 28 tests : bons ET mauvais cas
 terraform destroy                                   # tout supprimer (démontage propre inclus)
 ```
 
@@ -176,7 +178,7 @@ Terraform crée le cluster kind et installe les 5 charts Helm (versions épingl�
 Il appelle ensuite `scripts/bootstrap.sh` (configuration de Vault, clé de déploiement en lecture seule, application
 racine Argo CD) ; Argo CD déploie alors TaskVault depuis Git. Aucun `kubectl apply` manuel.
 
-**Reproductibilité** : le cycle `terraform destroy` puis `terraform apply` a été rejoué sur le cluster, suivi des 24 tests.
+**Reproductibilité** : le cycle `terraform destroy` puis `terraform apply` a été rejoué sur le cluster, suivi des 24 tests (la suite en compte 28 depuis).
 Ce test a révélé un défaut réel : le `destroy` expirait sur External Secrets, car Argo CD et ESO créent des ressources
 (avec finalizers) hors de Terraform. `scripts/teardown.sh` les supprime désormais avant la désinstallation des charts.
 
