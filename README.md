@@ -170,7 +170,7 @@ Prérequis : Docker, `kind`, `kubectl`, `helm`, `terraform` (>= 1.9), `gh` authe
 
 ```bash
 cd terraform && terraform init && terraform apply   # cluster + Vault + ESO + Kyverno + Falco + Argo CD + amorçage
-./scripts/verify-hardening.sh                       # 28 tests : bons ET mauvais cas
+./scripts/verify-hardening.sh                       # 29 tests : bons ET mauvais cas
 terraform destroy                                   # tout supprimer (démontage propre inclus)
 ```
 

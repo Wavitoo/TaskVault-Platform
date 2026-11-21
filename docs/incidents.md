@@ -54,8 +54,10 @@ indiquées comme telles : une cause supposée n'est pas une cause démontrée.
   corrigé en 2.0.8) et `body-parser` 2.3.0 (CVE-2026-111181, HIGH, déni de service, corrigé en 2.4.0). Ces dépendances sont dans le
   code de TaskVault et sont apparues après sa construction.
 - **Intérêt** : un contrôle effectué une seule fois à la construction n'aurait rien vu. C'est la raison d'être du rescan planifié.
-- **Statut** : **ouvert**. La correction se fait dans le dépôt TaskVault (mise à jour des dépendances), puis nouvelle image
-  et mise à jour du digest ici.
+- **Statut** : **corrigé** (21 nov. 2026). Dépendances mises à jour dans TaskVault (express 5.3.0, proxy-addr 2.0.8, body-parser 2.4.0),
+  mises à jour Alpine appliquées dans le Dockerfile, nouvelle image construite et signée par la CI, signature vérifiée avec `cosign`,
+  digest mis à jour dans `k8s/base/backend.yaml`. Piège évité : la nouvelle image exige la table `revoked_tokens`, or `init.sql` ne s'exécute
+  qu'à la première initialisation de PostgreSQL ; la migration (idempotente) a été appliquée à la base existante avant le déploiement.
 
 ## 10. Argo CD : correction de dérive parfois bloquée plusieurs minutes (cause établie)
 - **Symptôme** : après des dérives manuelles rapprochées, le retour à l'état de Git pouvait prendre plus de 3 minutes
