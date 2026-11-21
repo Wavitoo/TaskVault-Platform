@@ -7,7 +7,7 @@ metadata:
     # Exceptions documentées (voir docs/checkov-exceptions.md)
     checkov.io/skip1: "CKV_K8S_35=TaskVault lit process.env et ne doit pas être modifié ; les valeurs viennent de Vault via ESO, jamais de git"
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: backend
