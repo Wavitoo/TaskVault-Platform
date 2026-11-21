@@ -57,6 +57,12 @@ indiquées comme telles : une cause supposée n'est pas une cause démontrée.
 - **Statut** : **ouvert**. La correction se fait dans le dépôt TaskVault (mise à jour des dépendances), puis nouvelle image
   et mise à jour du digest ici.
 
-## 10. Argo CD : correction de dérive parfois différée
-- Après des changements manuels répétés et rapprochés, le retour à l'état de Git a pris plus longtemps que d'habitude
-  (réplicas restés à 5 un moment, application `OutOfSync`) avant de se corriger seul. Cause non investiguée.
+## 10. Argo CD : correction de dérive parfois bloquée plusieurs minutes (cause établie)
+- **Symptôme** : après des dérives manuelles rapprochées, le retour à l'état de Git pouvait prendre plus de 3 minutes
+  (réplicas restés à 5, application `OutOfSync`), ce qui faisait échouer le test de dérive de façon intermittente.
+- **Cause (journaux du contrôleur)** : `Skipping auto-sync: already attempted sync to [<révision>] with timeout 0s (retrying in 4m59s)`.
+  Argo CD applique un *backoff* à l'auto-correction : après une correction sur la même révision, il attend jusqu'à 5 minutes
+  (plafond par défaut) avant la suivante. Mesures avant correction : 200 s (non corrigé), 9 s, 200 s (non corrigé), 101 s, 200 s (non corrigé).
+- **Correction** : plafond ramené à 30 s (`controller.self.heal.backoff.*`, via Terraform). Il reste un espacement (pas de boucle
+  serrée si un autre contrôleur se bat contre Argo CD). Mesures après : 90 s (reliquat de l'ancien backoff) puis 30 s, 30 s, 30 s, 30 s.
+- **Leçon** : un comportement « intermittent » avait une cause précise, lisible dans les journaux ; je l'avais d'abord classé « non investigué ».

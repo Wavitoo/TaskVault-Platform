@@ -5,3 +5,12 @@ notifications:
   enabled: false
 applicationSet:
   enabled: false
+configs:
+  params:
+    # Auto-correction (selfHeal) : par défaut, après une correction sur la même révision, Argo CD attend jusqu'à 5 min
+    # avant d'en tenter une autre ("Skipping auto-sync: already attempted sync ... retrying in 4m59s").
+    # Une dérive manuelle répétée restait donc non corrigée plusieurs minutes. Plafond ramené à 30 s : la correction reste
+    # espacée (pas de boucle serrée si un autre contrôleur se bat contre Argo CD) mais devient rapide.
+    controller.self.heal.backoff.timeout.seconds: "2"
+    controller.self.heal.backoff.factor: "2"
+    controller.self.heal.backoff.cap.seconds: "30"

@@ -1,0 +1,43 @@
+# Garde-fous de ressources du namespace.
+#
+# LimitRange : valeurs par défaut pour un conteneur qui n'en déclare pas (sinon le quota ci-dessous le refuserait),
+# et plafond par conteneur.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults
+  namespace: taskvault
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 50m, memory: 64Mi }
+      default: { cpu: 250m, memory: 128Mi }
+      max: { cpu: "1", memory: 1Gi }
+---
+# ResourceQuota : un plafond pour tout le namespace. Un déploiement qui s'emballe (bug, boucle de scale,
+# attaque par création de pods) ne peut pas épuiser le nœud.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: namespace-quota
+  namespace: taskvault
+spec:
+  hard:
+    pods: "15"
+    requests.cpu: "2"
+    requests.memory: 2Gi
+    limits.cpu: "4"
+    limits.memory: 4Gi
+    persistentvolumeclaims: "3"
+---
+# PodDisruptionBudget : lors d'un drain de nœud ou d'une mise à jour volontaire, au moins 1 backend reste disponible.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  namespace: taskvault
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: backend

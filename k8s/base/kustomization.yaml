@@ -6,6 +6,7 @@ resources:
   - postgres.yaml
   - backend.yaml
   - networkpolicies.yaml
+  - resources.yaml
 configMapGenerator:
   - name: db-init
     files:
