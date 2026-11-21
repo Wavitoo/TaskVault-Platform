@@ -159,7 +159,7 @@ jobs:
       - name: Verify signature and attestation
         env:
           REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
-          IDENTITY: ^https://github.com/Wavitoo/taskvault-platform/\.github/workflows/ci\.yml@refs/heads/main$
+          IDENTITY: ^https://github.com/Wavitoo/TaskVault-Platform/\.github/workflows/ci\.yml@refs/heads/main$
         run: |
           cosign verify "$REF" \
             --certificate-identity-regexp "$IDENTITY" \
