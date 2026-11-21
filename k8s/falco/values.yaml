@@ -1,0 +1,49 @@
+# Falco : détection d'activité suspecte à l'exécution, via le driver eBPF "modern" (BTF/CO-RE).
+driver:
+  kind: modern_ebpf
+tty: true                 # sortie sans buffer : les alertes apparaissent immédiatement
+falco:
+  json_output: true       # alertes structurées (prêtes à être expédiées vers un SIEM)
+  json_include_output_property: true
+  log_level: info
+collectors:
+  kubernetes:
+    enabled: false        # métadonnées Kubernetes obtenues via le runtime de conteneurs
+customRules:
+  taskvault-rules.yaml: |-
+    # Règles propres à TaskVault. Le backend est une API Node.js : en fonctionnement normal il ne lance
+    # jamais de shell, d'outil réseau ni de lecture de l'environnement d'un processus.
+    - macro: in_taskvault_ns
+      condition: (container and k8s.ns.name = "taskvault")
+
+    # Les sondes de santé de Postgres lancent ce shell toutes les quelques secondes : exclusion par
+    # ÉGALITÉ STRICTE sur la ligne de commande complète (un préfixe permettrait de camoufler une commande).
+    - macro: postgres_healthcheck
+      condition: >-
+        (k8s.pod.name startswith "postgres-" and
+         proc.cmdline = 'sh -c pg_isready -U "$(cat /run/secrets/db/DB_USER)" -d "$(cat /run/secrets/db/DB_NAME)"')
+
+    - rule: Shell lancé dans un conteneur TaskVault
+      desc: Un shell est démarré dans un conteneur du namespace taskvault (kubectl exec, ou exécution de commande après une compromission).
+      condition: spawned_process and in_taskvault_ns and proc.name in (sh, ash, bash, dash) and not postgres_healthcheck
+      output: >-
+        Shell dans TaskVault (ns=%k8s.ns.name pod=%k8s.pod.name conteneur=%container.name
+        user=%user.name cmd=%proc.cmdline parent=%proc.pname)
+      priority: WARNING
+      tags: [taskvault, shell, mitre_execution]
+
+    - rule: Outil réseau ou installeur lancé dans un conteneur TaskVault
+      desc: curl, wget, nc ou apk lancé dans le backend ou la base, typique d'un téléchargement de charge utile ou d'un reverse shell.
+      condition: spawned_process and in_taskvault_ns and proc.name in (curl, wget, nc, ncat, apk)
+      output: >-
+        Outil réseau/installeur dans TaskVault (pod=%k8s.pod.name user=%user.name cmd=%proc.cmdline)
+      priority: CRITICAL
+      tags: [taskvault, network, mitre_command_and_control]
+
+    - rule: Lecture de l'environnement d'un processus dans TaskVault
+      desc: Lecture de /proc/<pid>/environ. Les secrets (JWT_SECRET, DB_PASSWORD) sont passés en variables d'environnement, ce qui est le moyen de les voler depuis l'intérieur du conteneur.
+      condition: open_read and in_taskvault_ns and fd.name glob "/proc/*/environ"
+      output: >-
+        Lecture de /proc/*/environ dans TaskVault (pod=%k8s.pod.name user=%user.name fichier=%fd.name cmd=%proc.cmdline)
+      priority: CRITICAL
+      tags: [taskvault, credential_access, mitre_credential_access]

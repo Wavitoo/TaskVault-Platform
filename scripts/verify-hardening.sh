@@ -95,6 +95,25 @@ kubectl -n argocd delete application t-escape >/dev/null 2>&1
 grep -q 'do not match any of the allowed destinations' <<<"$MSG" \
   && ok "une application hors du namespace taskvault est refusée par le projet Argo CD" || ko "le projet Argo CD n'a pas bloqué la destination interdite"
 
+echo "== Détection à l'exécution (Falco) =="
+falco_logs() { for p in $(kubectl -n falco get pod -o name); do kubectl -n falco logs "$p" -c falco --since="$1" 2>/dev/null; done; }
+BPOD=$(kubectl -n taskvault get pod -l app=backend --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
+sleep 25   # fenêtre d'observation du bruit : les sondes Postgres tournent toutes les 5-10 s
+falco_logs 25s | grep -q 'pg_isready' && ko "les sondes de santé Postgres déclenchent des alertes (faux positifs)" \
+  || ok "aucun faux positif : les sondes de santé Postgres sont exclues"
+kubectl -n $NS exec "$BPOD" -- sh -c 'id' >/dev/null 2>&1
+kubectl -n $NS exec "$BPOD" -- sh -c 'cat /proc/1/environ | wc -c' >/dev/null 2>&1
+kubectl -n $NS exec "$BPOD" -- sh -c 'wget -q -T 2 -O /dev/null http://example.invalid' >/dev/null 2>&1
+# Cas négatif : même commande dans un AUTRE namespace, ne doit PAS déclencher les règles TaskVault.
+kubectl -n default run t-falco-neg --rm -i --restart=Never --quiet --image=curlimages/curl:8.11.1 --command -- sh -c 'id' >/dev/null 2>&1
+sleep 5
+FL=$(falco_logs 60s)
+grep -q "Shell dans TaskVault.*pod=$BPOD" <<<"$FL" && ok "un shell dans le backend est détecté" || ko "shell dans le backend non détecté"
+grep -q "Lecture de /proc/\*/environ dans TaskVault.*pod=$BPOD" <<<"$FL" && ok "la lecture de /proc/*/environ (vol de secrets) est détectée" || ko "lecture de /proc/*/environ non détectée"
+grep -q "Outil réseau/installeur dans TaskVault.*pod=$BPOD" <<<"$FL" && ok "un outil réseau (wget) dans le backend est détecté" || ko "outil réseau non détecté"
+grep -q 'pod=t-falco-neg' <<<"$FL" && grep 'pod=t-falco-neg' <<<"$FL" | grep -q 'TaskVault' \
+  && ko "un shell hors namespace taskvault déclenche une règle TaskVault" || ok "un shell hors namespace taskvault ne déclenche pas les règles TaskVault"
+
 echo "== Surface d'attaque =="
 kubectl -n $NS get pod -l app=backend -o jsonpath='{.items[0].spec.containers[0].securityContext.readOnlyRootFilesystem}' | grep -q true \
   && ok "système de fichiers du backend en lecture seule" || ko "système de fichiers du backend modifiable"

@@ -29,7 +29,7 @@ d'approvisionnement signée, secrets gérés, déploiement GitOps et détection 
 - [x] 4. Kyverno : refus des images non signées
 - [x] 5. Gestion des secrets
 - [x] 6. GitOps avec Argo CD
-- [ ] 7. Détection à l'exécution avec Falco
+- [x] 7. Détection à l'exécution avec Falco
 - [ ] 8. Terraform pour piloter le tout
 
 ## Chaîne d'approvisionnement (CI)
@@ -81,6 +81,27 @@ puis application. Les politiques passent donc **avant** l'application.
 Argo ne peut pas se déployer lui-même avant d'avoir accès au dépôt). Le digest de l'image est mis à jour à la main dans
 `k8s/base/backend.yaml`. Une automatisation (Argo CD Image Updater ou PR automatique) serait la suite.
 
+## Détection à l'exécution : Falco
+
+Les contrôles précédents agissent *avant* l'exécution. **Falco** surveille les appels système (driver eBPF `modern`,
+noyau WSL2 compatible grâce à BTF) et alerte quand un conteneur TaskVault fait ce qu'une API Node.js ne fait jamais.
+Trois règles propres au projet (`k8s/falco/values.yaml`), toutes limitées au namespace `taskvault` :
+
+| Règle | Priorité | Pourquoi |
+|---|---|---|
+| Shell lancé dans un conteneur | WARNING | `kubectl exec` ou exécution de commande après compromission |
+| Outil réseau/installeur (curl, wget, nc, apk) | CRITICAL | Téléchargement de charge utile, reverse shell |
+| Lecture de `/proc/*/environ` | CRITICAL | Vol des secrets passés en variables d'environnement (limite connue de l'étape 5) |
+
+**Faux positif traité** : les sondes de santé Postgres lancent un shell toutes les quelques secondes et saturaient
+les alertes. Elles sont exclues par **égalité stricte** sur la ligne de commande complète (un préfixe permettrait de
+camoufler une commande). Les tests vérifient les trois détections, l'absence de bruit, et qu'un shell hors du
+namespace `taskvault` ne déclenche rien.
+
+**Limites connues** : Falco *détecte*, il ne bloque pas. Les alertes restent dans les logs de Falco : les expédier vers
+un SIEM (Falcosidekick, Loki/Grafana, Wazuh) est l'étape suivante. Falco s'exécute avec des privilèges élevés sur le nœud
+(c'est inhérent à l'eBPF).
+
 ## Démarrage
 
 Prérequis : Docker, `kind`, `kubectl`.
@@ -89,6 +110,7 @@ Prérequis : Docker, `kind`, `kubectl`.
 ./scripts/cluster-up.sh            # crée le cluster
 ./scripts/install-kyverno.sh       # Kyverno (moteur de politiques)
 ./scripts/install-secrets.sh       # Vault (dev) + External Secrets + secrets aléatoires
+./scripts/install-falco.sh         # Falco : détection à l'exécution
 ./scripts/install-argocd.sh        # Argo CD : déploie tout le reste depuis ce dépôt (GitOps)
 ./scripts/verify-hardening.sh      # prouve que les protections bloquent bien
 ./scripts/cluster-down.sh          # supprime le cluster
