@@ -21,7 +21,7 @@ Le modèle du code applicatif est dans le dépôt TaskVault. Statuts : **Atténu
 | 13 | Elevation of privilege | Compromission d'Argo CD (droits étendus sur le cluster) | Clé de déploiement en lecture seule ; contrôleur Argo avec ses droits par défaut | n/a | Acceptée : cluster local de démonstration |
 | 14 | Supply chain | Action GitHub compromise (tag mobile) | Toutes les actions épinglées par SHA, mises à jour par Dependabot | `actionlint`, revue | Atténuée |
 | 15 | Supply chain | Quelqu'un modifie `ci.yml` pour signer une image malveillante | Protection de `main` (PR + 4 contrôles, y compris admin) ; l'identité de signature inclut le chemin du workflow et la branche | Configuration GitHub | Atténuée |
-| 16 | Supply chain | Faille publiée **après** le build dans une dépendance déjà déployée | Rescan Trivy hebdomadaire de l'image déployée | Le rescan a trouvé 2 failles corrigeables (voir `docs/incidents.md`, n°9) | **Ouverte** : correction dans TaskVault |
+| 16 | Supply chain | Faille publiée **après** le build dans une dépendance déjà déployée | Rescan Trivy hebdomadaire de l'image déployée | Le rescan a trouvé 2 failles corrigeables (voir `docs/incidents.md`, n°9) | **Corrigée** : image reconstruite, signée et déployée |
 | 17 | Supply chain | Image tierce non signée (PostgreSQL, Docker Hub) | Épinglée par digest | Checkov | Partielle : Kyverno ne vérifie que `ghcr.io/*` |
 | 18 | Information disclosure | Fuite via l'état Terraform local | `.gitignore` sur l'état et les clés ; l'état ne contient pas de secret applicatif | Revue | Acceptée : état local, un seul opérateur |
 | 19 | Elevation of privilege | Vault en mode dev (token root connu, en mémoire) | Aucun | n/a | Acceptée : démonstration locale uniquement, pas de production |

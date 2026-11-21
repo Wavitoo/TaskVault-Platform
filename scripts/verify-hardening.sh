@@ -54,6 +54,22 @@ U="u$RANDOM"
 run_pod t-flow "role=client" "curl -sf -m 5 -X POST -H 'Content-Type: application/json' -d '{\\\"username\\\":\\\"$U\\\",\\\"password\\\":\\\"Pw-test-123\\\"}' http://backend/api/auth/register && curl -sf -m 5 -X POST -H 'Content-Type: application/json' -d '{\\\"username\\\":\\\"$U\\\",\\\"password\\\":\\\"Pw-test-123\\\"}' http://backend/api/auth/login" \
   && ok "inscription + connexion (backend -> base) fonctionnent" || ko "le flux inscription/connexion échoue"
 
+# Révocation : après logout, le même jeton doit être refusé (401). Prouve aussi que la table revoked_tokens existe en base.
+# Le script est passé en base64 pour éviter l'imbrication de guillemets dans le JSON de --overrides.
+REVOKE_SH=$(cat <<EOS
+J='Content-Type: application/json'
+B='{"username":"${U}r","password":"Pw-test-123"}'
+curl -sf -m 5 -X POST -H "\$J" -d "\$B" http://backend/api/auth/register >/dev/null || exit 1
+T=\$(curl -sf -m 5 -X POST -H "\$J" -d "\$B" http://backend/api/auth/login | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+[ -n "\$T" ] || exit 2
+[ "\$(curl -s -o /dev/null -w '%{http_code}' -m 5 -H "Authorization: Bearer \$T" http://backend/api/tasks)" = 200 ] || exit 3
+curl -sf -m 5 -X POST -H "Authorization: Bearer \$T" http://backend/api/auth/logout >/dev/null || exit 4
+[ "\$(curl -s -o /dev/null -w '%{http_code}' -m 5 -H "Authorization: Bearer \$T" http://backend/api/tasks)" = 401 ]
+EOS
+)
+run_pod t-revoke "role=client" "echo $(printf '%s' "$REVOKE_SH" | base64 -w0) | base64 -d | sh" \
+  && ok "un jeton est accepté, puis refusé (401) après logout" || ko "la révocation du jeton ne fonctionne pas de bout en bout"
+
 echo "== Pod Security (restricted) =="
 OUT=$(kubectl -n $NS run t-priv --restart=Never --image=busybox --privileged -- sleep 1 2>&1)
 if grep -qi 'forbidden\|violates' <<<"$OUT"; then
