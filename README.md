@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/Wavitoo/taskvault-platform/actions/workflows/ci.yml/badge.svg)
 
-Plateforme de déploiement sécurisé pour [TaskVault](https://github.com/Wavitoo/devsecops-security-pipeline).
+Plateforme de déploiement sécurisé pour [TaskVault](https://github.com/Wavitoo/TaskVault).
 
 TaskVault prouve que le **code** est sécurisé avant fusion (SAST, SCA, secrets, conteneur, DAST).
 Ce dépôt prouve que le **déploiement et l'exécution** le sont aussi : Kubernetes durci, chaîne
@@ -184,3 +184,7 @@ Ce test a révélé un défaut réel : le `destroy` expirait sur External Secret
 
 **Limites connues** : l'état Terraform est local (pas de backend distant) ; Vault étant en mémoire, un cluster recréé
 régénère ses secrets et une nouvelle clé de déploiement (les anciennes sont retirées automatiquement).
+
+## Licence
+
+MIT, voir [LICENSE](LICENSE).
