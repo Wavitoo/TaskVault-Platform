@@ -3,6 +3,10 @@ kind: StatefulSet
 metadata:
   name: postgres
   namespace: taskvault
+  annotations:
+    # Exceptions documentées (voir docs/checkov-exceptions.md)
+    checkov.io/skip1: "CKV_K8S_40=L'image postgres exige son UID 70 pour initdb (utilisateur absent de /etc/passwd sinon)"
+    checkov.io/skip2: "CKV_K8S_35=Secrets en variables d'environnement : remplacé par un gestionnaire de secrets à l'étape 5"
 spec:
   serviceName: postgres
   replicas: 1
@@ -25,7 +29,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: postgres
-          image: postgres:16-alpine
+          image: postgres@sha256:1d5b02d3a9941fbd52437db4107f8c52d6297dac553ca1e5c299ebb3756b4857
+          imagePullPolicy: Always
           ports:
             - containerPort: 5432
           env:
@@ -45,6 +50,11 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: 500m, memory: 512Mi }
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 30
+            periodSeconds: 10
           readinessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]

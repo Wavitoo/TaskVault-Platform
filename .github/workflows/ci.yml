@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Par défaut, le jeton GitHub est en lecture seule. Chaque job demande ce dont il a besoin.
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/wavitoo/taskvault-backend
+
+jobs:
+  iac-scan:
+    name: IaC - Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install Checkov
+        run: pip install --quiet checkov==3.4.6
+
+      # Bloque sur toute vérification échouée. Les exceptions sont des annotations
+      # checkov.io/skip dans les manifestes, chacune avec sa justification.
+      - name: Scan Kubernetes manifests
+        run: checkov -d k8s --framework kubernetes --compact --quiet
+
+  image-build:
+    name: Image - build (sans publication)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Read pinned TaskVault commit
+        id: ref
+        run: echo "sha=$(cat taskvault.ref)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout TaskVault source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: Wavitoo/devsecops-security-pipeline
+          ref: ${{ steps.ref.outputs.sha }}
+          path: src
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: src/backend
+          push: false
+
+  publish:
+    name: Image - build, SBOM, signature
+    runs-on: ubuntu-latest
+    needs: iac-scan
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write    # pousser l'image sur GHCR
+      id-token: write    # signature "keyless" : identité prouvée par le jeton OIDC de GitHub
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Read pinned TaskVault commit
+        id: ref
+        run: echo "sha=$(cat taskvault.ref)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout TaskVault source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: Wavitoo/devsecops-security-pipeline
+          ref: ${{ steps.ref.outputs.sha }}
+          path: src
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: src/backend
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.ref.outputs.sha }}
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: true
+
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532  # v4.1.3
+
+      # On signe le DIGEST (contenu exact), jamais un tag : un tag peut être déplacé.
+      - name: Sign image
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "$REF"
+
+      - name: Attach SBOM as signed attestation
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$REF"
+
+      # Preuve : on vérifie nous-mêmes que la signature est valide ET qu'elle vient bien de ce workflow.
+      - name: Verify signature and attestation
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          IDENTITY: ^https://github.com/Wavitoo/taskvault-platform/\.github/workflows/ci\.yml@refs/heads/main$
+        run: |
+          cosign verify "$REF" \
+            --certificate-identity-regexp "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          cosign verify-attestation "$REF" --type spdxjson \
+            --certificate-identity-regexp "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
+          echo "Digest signé : ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
