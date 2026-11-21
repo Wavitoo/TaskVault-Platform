@@ -30,7 +30,7 @@ d'approvisionnement signée, secrets gérés, déploiement GitOps et détection 
 - [x] 5. Gestion des secrets
 - [x] 6. GitOps avec Argo CD
 - [x] 7. Détection à l'exécution avec Falco
-- [ ] 8. Terraform pour piloter le tout
+- [x] 8. Terraform pour piloter le tout
 
 ## Chaîne d'approvisionnement (CI)
 
@@ -102,20 +102,6 @@ namespace `taskvault` ne déclenche rien.
 un SIEM (Falcosidekick, Loki/Grafana, Wazuh) est l'étape suivante. Falco s'exécute avec des privilèges élevés sur le nœud
 (c'est inhérent à l'eBPF).
 
-## Démarrage
-
-Prérequis : Docker, `kind`, `kubectl`.
-
-```bash
-./scripts/cluster-up.sh            # crée le cluster
-./scripts/install-kyverno.sh       # Kyverno (moteur de politiques)
-./scripts/install-secrets.sh       # Vault (dev) + External Secrets + secrets aléatoires
-./scripts/install-falco.sh         # Falco : détection à l'exécution
-./scripts/install-argocd.sh        # Argo CD : déploie tout le reste depuis ce dépôt (GitOps)
-./scripts/verify-hardening.sh      # prouve que les protections bloquent bien
-./scripts/cluster-down.sh          # supprime le cluster
-```
-
 ## Ce que le déploiement durci applique
 
 | Contrôle | Effet |
@@ -129,3 +115,24 @@ Prérequis : Docker, `kind`, `kubectl`.
 
 `verify-hardening.sh` joue les bons **et** les mauvais cas : un contrôle jamais vu bloquer quelque chose
 n'est pas une preuve.
+
+## Démarrage
+
+Prérequis : Docker, `kind`, `kubectl`, `helm`, `terraform` (>= 1.9), `gh` authentifié.
+
+```bash
+cd terraform && terraform init && terraform apply   # cluster + Vault + ESO + Kyverno + Falco + Argo CD + amorçage
+./scripts/verify-hardening.sh                       # 24 tests : bons ET mauvais cas
+terraform destroy                                   # tout supprimer (démontage propre inclus)
+```
+
+Terraform crée le cluster kind et installe les 5 charts Helm (versions épinglées, valeurs dans `k8s/*/values.yaml`).
+Il appelle ensuite `scripts/bootstrap.sh` (configuration de Vault, clé de déploiement en lecture seule, application
+racine Argo CD) ; Argo CD déploie alors TaskVault depuis Git. Aucun `kubectl apply` manuel.
+
+**Reproductibilité** : le cycle `terraform destroy` puis `terraform apply` a été rejoué sur le cluster, suivi des 24 tests.
+Ce test a révélé un défaut réel : le `destroy` expirait sur External Secrets, car Argo CD et ESO créent des ressources
+(avec finalizers) hors de Terraform. `scripts/teardown.sh` les supprime désormais avant la désinstallation des charts.
+
+**Limites connues** : l'état Terraform est local (pas de backend distant) ; Vault étant en mémoire, un cluster recréé
+régénère ses secrets et une nouvelle clé de déploiement (les anciennes sont retirées automatiquement).

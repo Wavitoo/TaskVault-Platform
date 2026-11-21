@@ -97,8 +97,20 @@ grep -q 'do not match any of the allowed destinations' <<<"$MSG" \
 
 echo "== Détection à l'exécution (Falco) =="
 falco_logs() { for p in $(kubectl -n falco get pod -o name); do kubectl -n falco logs "$p" -c falco --since="$1" 2>/dev/null; done; }
-BPOD=$(kubectl -n taskvault get pod -l app=backend --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
 sleep 25   # fenêtre d'observation du bruit : les sondes Postgres tournent toutes les 5-10 s
+# Le test GitOps précédent a fait varier le nombre de pods : un pod "Running" peut être en cours de suppression.
+# On attend un état stable (exactement 2 backends prêts, aucun en suppression) avant de choisir la cible.
+BPOD=""
+for _ in $(seq 1 40); do
+  BPOD=$(kubectl -n $NS get pod -l app=backend -o json | python3 -c '
+import sys,json
+pods=json.load(sys.stdin)["items"]
+ok=[p["metadata"]["name"] for p in pods if "deletionTimestamp" not in p["metadata"]
+    and any(c.get("type")=="Ready" and c.get("status")=="True" for c in p["status"].get("conditions",[]))]
+print(ok[0] if len(pods)==2 and len(ok)==2 else "")')
+  [ -n "$BPOD" ] && break; sleep 3
+done
+[ -n "$BPOD" ] || { ko "pas d'état stable du backend pour tester Falco"; BPOD=none; }
 falco_logs 25s | grep -q 'pg_isready' && ko "les sondes de santé Postgres déclenchent des alertes (faux positifs)" \
   || ok "aucun faux positif : les sondes de santé Postgres sont exclues"
 kubectl -n $NS exec "$BPOD" -- sh -c 'id' >/dev/null 2>&1
