@@ -4,7 +4,7 @@
 # Prérequis : gh authentifié (création de la clé de déploiement).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-REPO=Wavitoo/taskvault-platform
+REPO=Wavitoo/TaskVault-Platform
 CLUSTER="${CLUSTER_NAME:-taskvault}"
 kind export kubeconfig --name "$CLUSTER" >/dev/null 2>&1 || true
 kubectl config use-context "kind-$CLUSTER" >/dev/null

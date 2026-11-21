@@ -1,4 +1,4 @@
-# Modèle de menaces (STRIDE) : taskvault-platform
+# Modèle de menaces (STRIDE) : TaskVault-Platform
 
 Périmètre : le déploiement et l'exécution de TaskVault (cluster, chaîne de livraison, secrets, GitOps).
 Le modèle du code applicatif est dans le dépôt TaskVault. Statuts : **Atténuée** (contrôle en place et testé),

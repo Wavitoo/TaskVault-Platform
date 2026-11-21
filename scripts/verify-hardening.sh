@@ -122,7 +122,7 @@ kind: Application
 metadata: { name: t-escape, namespace: argocd }
 spec:
   project: taskvault
-  source: { repoURL: git@github.com:Wavitoo/taskvault-platform.git, targetRevision: main, path: k8s/base }
+  source: { repoURL: git@github.com:Wavitoo/TaskVault-Platform.git, targetRevision: main, path: k8s/base }
   destination: { server: https://kubernetes.default.svc, namespace: kube-system }
 APP
 sleep 10

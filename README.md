@@ -1,6 +1,6 @@
-# taskvault-platform
+# TaskVault-Platform
 
-![CI](https://github.com/Wavitoo/taskvault-platform/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/Wavitoo/TaskVault-Platform/actions/workflows/ci.yml/badge.svg)
 
 Plateforme de déploiement sécurisé pour [TaskVault](https://github.com/Wavitoo/TaskVault).
 

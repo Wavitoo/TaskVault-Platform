@@ -26,11 +26,13 @@ spec:
       cosign:
         keyless:
           identities:
-            - subjectRegExp: '^https://github\.com/Wavitoo/taskvault-platform/\.github/workflows/ci\.yml@refs/heads/main$'
+            # Transition du renommage du dépôt : les images signées avant le renommage portent l'ancien nom.
+            # À resserrer sur le seul nouveau nom une fois l'image resignée et déployée.
+            - subjectRegExp: '^https://github\.com/Wavitoo/(taskvault-platform|TaskVault-Platform)/\.github/workflows/ci\.yml@refs/heads/main$'
               issuer: https://token.actions.githubusercontent.com
         ctlog:
           url: https://rekor.sigstore.dev
   validations:
     - expression: >-
         images.containers.map(image, verifyImageSignatures(image, [attestors.ciKeyless])).all(e, e > 0)
-      message: "Image refusée : signature Cosign absente ou non émise par le workflow CI de taskvault-platform (main)."
+      message: "Image refusée : signature Cosign absente ou non émise par le workflow CI de TaskVault-Platform (main)."

@@ -10,7 +10,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "-3"
 spec:
   sourceRepos:
-    - git@github.com:Wavitoo/taskvault-platform.git
+    - git@github.com:Wavitoo/TaskVault-Platform.git
   destinations:
     - server: https://kubernetes.default.svc
       namespace: taskvault

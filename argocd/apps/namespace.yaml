@@ -10,7 +10,7 @@ metadata:
 spec:
   project: taskvault
   source:
-    repoURL: git@github.com:Wavitoo/taskvault-platform.git
+    repoURL: git@github.com:Wavitoo/TaskVault-Platform.git
     targetRevision: main
     path: k8s/namespace
   destination:
