@@ -31,6 +31,9 @@ jobs:
   secrets:
     name: Secret Detection - Gitleaks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read   # l'action liste les commits de la PR pour limiter le scan à ce qui a changé
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
