@@ -68,3 +68,10 @@ indiquées comme telles : une cause supposée n'est pas une cause démontrée.
 - **Correction** : plafond ramené à 30 s (`controller.self.heal.backoff.*`, via Terraform). Il reste un espacement (pas de boucle
   serrée si un autre contrôleur se bat contre Argo CD). Mesures après : 90 s (reliquat de l'ancien backoff) puis 30 s, 30 s, 30 s, 30 s.
 - **Leçon** : un comportement « intermittent » avait une cause précise, lisible dans les journaux ; je l'avais d'abord classé « non investigué ».
+
+## 11. Renommer le dépôt change l'identité de signature
+- **Constat** : l'identité Cosign sans clé contient le nom du dépôt (`.../Wavitoo/<dépôt>/.github/workflows/ci.yml@refs/heads/main`). Renommer le dépôt
+  invalide donc la règle Kyverno pour les images déjà signées, et au prochain redémarrage d'un pod elles auraient été refusées.
+- **Traitement** : la politique a d'abord accepté les deux noms (transition), la CI a resigné l'image sous le nouveau nom, la signature a été vérifiée
+  avec le seul nouveau nom, le digest a été mis à jour, puis la politique a été resserrée sur le nouveau nom uniquement.
+- **Aussi** : l'URL SSH d'Argo CD redirige après un renommage, mais le secret de dépôt a été mis à jour dans le cluster avant la PR pour ne pas dépendre de la redirection.

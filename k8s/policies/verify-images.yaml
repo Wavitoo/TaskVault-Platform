@@ -26,9 +26,7 @@ spec:
       cosign:
         keyless:
           identities:
-            # Transition du renommage du dépôt : les images signées avant le renommage portent l'ancien nom.
-            # À resserrer sur le seul nouveau nom une fois l'image resignée et déployée.
-            - subjectRegExp: '^https://github\.com/Wavitoo/(taskvault-platform|TaskVault-Platform)/\.github/workflows/ci\.yml@refs/heads/main$'
+            - subjectRegExp: '^https://github\.com/Wavitoo/TaskVault-Platform/\.github/workflows/ci\.yml@refs/heads/main$'
               issuer: https://token.actions.githubusercontent.com
         ctlog:
           url: https://rekor.sigstore.dev
