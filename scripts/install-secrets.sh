@@ -9,7 +9,7 @@ helm upgrade --install vault hashicorp/vault --version 0.34.1 -n vault --create-
   -f k8s/vault/values.yaml --wait --timeout 5m
 helm upgrade --install external-secrets external-secrets/external-secrets --version 2.15.0 \
   -n external-secrets --create-namespace -f k8s/external-secrets/values.yaml --wait --timeout 5m
-kubectl apply -f k8s/base/namespace.yaml
+kubectl apply -f k8s/namespace/namespace.yaml
 ./scripts/configure-vault.sh
 kubectl apply -k k8s/secrets
 kubectl -n taskvault wait --for=condition=Ready externalsecret/taskvault-db externalsecret/taskvault-app --timeout=120s

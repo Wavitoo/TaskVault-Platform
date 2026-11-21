@@ -1,0 +1,18 @@
+# Application racine ("app of apps") : la seule chose appliquée à la main. Elle déploie tout le reste
+# depuis argocd/apps/, y compris le projet et les applications de TaskVault.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Wavitoo/taskvault-platform.git
+    targetRevision: main
+    path: argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

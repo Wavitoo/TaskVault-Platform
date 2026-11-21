@@ -1,0 +1,19 @@
+# Projet Argo CD : limite ce que les applications de TaskVault ont le droit de faire.
+# Une application de ce projet ne peut déployer que depuis CE dépôt, que dans le namespace
+# "taskvault", et ne peut créer que deux types de ressources hors namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: taskvault
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  sourceRepos:
+    - git@github.com:Wavitoo/taskvault-platform.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: taskvault
+  clusterResourceWhitelist:
+    - { group: "", kind: Namespace }
+    - { group: external-secrets.io, kind: ClusterSecretStore }

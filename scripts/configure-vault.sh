@@ -15,9 +15,12 @@ else
   echo "Secrets créés dans Vault."
 fi
 
-# 2. Politique : lecture seule sur secret/taskvault/*, rien d'autre
+# 2. Politique : lecture seule sur secret/taskvault/* et secret/argocd/*, rien d'autre
 V policy write taskvault-read - >/dev/null <<'POLICY'
 path "secret/data/taskvault/*" {
+  capabilities = ["read"]
+}
+path "secret/data/argocd/*" {
   capabilities = ["read"]
 }
 POLICY

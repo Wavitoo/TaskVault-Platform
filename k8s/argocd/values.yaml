@@ -1,0 +1,7 @@
+# Argo CD : installation minimale pour un cluster local.
+dex:
+  enabled: false            # pas de SSO nécessaire en local
+notifications:
+  enabled: false
+applicationSet:
+  enabled: false
